@@ -77,7 +77,7 @@ function buildSlackMessage (data) {
     ~editorString
     ~'fields*20*40timestamp*2c*20*40message*2c*20request_uri*2c*20status*0a*7c*20sort*20*40timestamp*20desc
     ~isLiveTail~false
-    ~source~(~'*2faws*2felasticbeanstalk*2f${data.AlarmDescription}*2fdocker*2fnginx))`.replace(/\r?\n|\r/g, '')
+    ~source~(~'*2faws*2felasticbeanstalk*2f${data.AlarmDescription}*2fdocker*2fnginx))`.replace(/\r?\n|\r|\s/g, '')
 
   const logLink = `<${linkTarget}|View Logs>`
   return {
