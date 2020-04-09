@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: Handler that subscribes to SNS topic with internal server errors from the AWSTemplateFormatVersion
+
+Parameters:
+
+  ApiLogGroupName:
+    Type: String
+    Description: Name of the log group to filter for errors
+    Default: /aws/elasticbeanstalk/api-production/docker/nginx
+
+  WorkerApiLogGroupName:
+    Type: String
+    Description: Name of the log group to filter for errors
+    Default: /aws/elasticbeanstalk/api-worker-production/docker/nginx
+
+  Api500StatusMetricName:
+    Type: String
+    Description: Name of 500 status metric for the api
+    Default: api-500-status-production
+
+  WorkerApi500StatusMetricName:
+    Type: String
+    Description: Name of 500 status metric for the worker api
+    Default: worker-api-500-status-production
+
+
+Resources:
+
+  Api500ErrorsToSlackHandler:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Role: arn:aws:iam::799212276699:role/aws-lambda-basic-execution-role
+      CodeUri: .
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          webhook: AQECAHj6Y8swFFZ8sg2A5LDqzMqXTngYQ4IY+YtXTBbxtG0Z0wAAAK8wgawGCSqGSIb3DQEHBqCBnjCBmwIBADCBlQYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAyscuWhAv/SJ3u/ry0CARCAaFZGSzR4TS4uvgtfBHQjCYKZc4/skKA9CWqOVijEuftWp0GxjRdaKCqqF09OIrOiOzRkggiDCvWn7TxMr+lWjbY3O1W96nu2VzpCA7/VHJE9Cddod0g2qfgI9Au4OPchi47xKmsd19dy
+      Events:
+        SNSEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref CloudWatchAlarmsTopic
+
+  Api500Errors:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions: 
+        - !Ref CloudWatchAlarmsTopic
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmDescription: api-production # used in handler by convention as the log group name
+      EvaluationPeriods: 1
+      MetricName: !Ref Api500StatusMetricName
+      Namespace: php-api
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+
+  WorkerApi500Errors:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions: 
+        - !Ref CloudWatchAlarmsTopic
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmDescription: api-worker-production # used in handler by convention as the log group name
+      EvaluationPeriods: 1
+      MetricName: !Ref WorkerApi500StatusMetricName
+      Namespace: php-api
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+
+  Api500ErrorsFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ApiLogGroupName
+      FilterPattern: "{$.status = 5*}"
+      MetricTransformations:
+        -
+          MetricNamespace: php-api
+          MetricName: !Ref Api500StatusMetricName
+          MetricValue: 1
+
+  WorkerApi500ErrorsFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref WorkerApiLogGroupName
+      FilterPattern: "{$.status = 5*}"
+      MetricTransformations:
+        -
+          MetricNamespace: php-api
+          MetricName: !Ref WorkerApi500StatusMetricName
+          MetricValue: 1
+
+  CloudWatchAlarmsTopic:
+    Type: AWS::SNS::Topic
