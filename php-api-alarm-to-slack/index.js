@@ -68,29 +68,48 @@ function post (requestURL, data, callback) {
 }
 
 function buildSlackMessage (data) {
-  const linkTarget = `https://eu-west-1.console.aws.amazon.com/cloudwatch/home?region=eu-west-1
-    #logs-insights:queryDetail=
-    ~(end~0
-    ~start~-3600
-    ~timeType~'RELATIVE
-    ~unit~'seconds
-    ~editorString
-    ~'fields*20*40timestamp*2c*20*40message*2c*20request_uri*2c*20status*0a*7c*20sort*20*40timestamp*20desc
-    ~isLiveTail~false
-    ~source~(~'*2faws*2felasticbeanstalk*2f${data.AlarmDescription}*2fdocker*2fnginx))`.replace(/\r?\n|\r|\s/g, '')
+  const currentDate = new Date()
+  const endDate = currentDate.toISOString().replace(/\:/g, '*3a')
+  const startDate = new Date(currentDate.getTime() - 3600000).toISOString().replace(/\:/g, '*3a')
+  const timestamp = currentDate.getTime() + 5 // add 5 seconds to guarantee the errors to appear in the query
 
-  const logLink = `<${linkTarget}|View Logs>`
+  const linkTarget = (filter) => `https://eu-west-1.console.aws.amazon.com/cloudwatch/home?region=eu-west-1
+    #logs-insights:queryDetail=
+    ~(end~'${endDate}
+    ~start~'${startDate}
+    ~timeType~'ABSOLUTE
+    ~tz~'Local
+    ~editorString~'
+      fields*20*40timestamp*2c*20*40message*2c*20request_uri*2c*20status*0a*7c*20
+      sort*20*40timestamp*20desc*0a*7c*20
+      filter*20${filter}
+    ~isLiveTail~false
+    ~source~(~'*2faws*2felasticbeanstalk*2f${data.AlarmDescription}*2fdocker*2fnginx));tab=logs`.replace(/\r?\n|\r|\s/g, '')
+
   return {
-    channel: ENV.channel,
-    username: ENV.username,
-    icon_emoji: ENV.icon_emoji,
-    icon_url: ENV.icon_url,
-    attachments: [
+    "blocks": [
       {
-        fallback: data.AlarmName,
-        title: "Internal Server Errors",
-        text: `Encountered request(s) with status code 500 in the last ${data.Trigger.Period} seconds.\n${logLink}`,
-        color: 'danger'
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": `*Internal Server Errors*\nEncountered request(s) with status code 500 in the last ${data.Trigger.Period} seconds.`
+        }
+      },
+      {
+        "type": "divider"
+      },
+      {
+        "type": "context",
+        "elements": [
+          {
+            "type": "mrkdwn",
+            "text": `<${linkTarget('status*20*3d*20500*0a')}|View 500 errors>`
+          },
+          {
+            "type": "mrkdwn",
+            "text": `<${linkTarget('*40message*20like*20*2f*5c*5berror*5c*5d*2f*0a')}|View error messages>`
+          }
+        ]
       }
     ]
   }
